@@ -1,7 +1,9 @@
-FROM openjdk:17-jdk-slim
+FROM eclipse-temurin:17-jdk-alpine
 
-WORKDIR /app
+VOLUME /tmp
 
-COPY target/my-api-0.0.1-SNAPSHOT.jar /app/my-api.jar
+COPY target/*.jar app.jar
 
-ENTRYPOINT ["java", "-jar", "my-api.jar"]
+EXPOSE 8080
+
+ENTRYPOINT [ "java", "-jar", "/app.jar" ]
