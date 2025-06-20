@@ -1,8 +1,8 @@
-package com.pthieu.identity_service.dto.request;
+package com.pthieu.identity_service.dto.response;
 
 import java.time.LocalDate;
+import java.util.Set;
 
-import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,15 +11,15 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class UserUpdateRequest {
-    @Size(min = 8, message = "PASSWORD_INVALID")
-    String password;
-    String firstName;
-    String lastName;
-    LocalDate dob;
-
+public class UserResponse {
+    private String id;
+    private String username;
+    private String firstName;
+    private String lastName;
+    private LocalDate dob;
+    Set<String> roles;
 }

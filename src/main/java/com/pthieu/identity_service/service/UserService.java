@@ -1,67 +1,87 @@
 package com.pthieu.identity_service.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PostAuthorize;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.pthieu.identity_service.dto.request.UserCreationRequest;
 import com.pthieu.identity_service.dto.request.UserUpdateRequest;
+import com.pthieu.identity_service.dto.response.UserResponse;
 import com.pthieu.identity_service.entity.User;
+import com.pthieu.identity_service.enums.Role;
+import com.pthieu.identity_service.exception.AppException;
+import com.pthieu.identity_service.exception.ErrorCode;
+import com.pthieu.identity_service.mapper.UserMapper;
 import com.pthieu.identity_service.repository.UserRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.AccessLevel;
+
+import java.util.HashSet;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class UserService {
-    @Autowired
-    private UserRepository userRepository;
+    UserRepository userRepository;
+    UserMapper userMapper;
+    PasswordEncoder passwordEncoder;
 
-    public User createUser(UserCreationRequest request) {
-        User user = new User();
-
+    public UserResponse createUser(UserCreationRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new RuntimeException("User already exists with username: " + request.getUsername());
+            throw new AppException(ErrorCode.USER_EXISTS);
         }
-        user.setUsername(request.getUsername());
-        user.setPassword(request.getPassword());
-        user.setFirstName(request.getFirstName());
-        user.setLastName(request.getLastName());
-        user.setDob(request.getDob());
 
-        return userRepository.save(user);
+        User user = userMapper.toUser(request);
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+
+        HashSet<String> roles = new HashSet<>();
+        roles.add(Role.USER.name());
+        user.setRoles(roles);
+
+        return userMapper.toUserResponse(userRepository.save(user));
     }
 
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
-    }
-
-    public User getUserByUsername(String username) {
+    @PreAuthorize("hasRole('ADMIN')")
+    public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
+                .map(userMapper::toUserResponse)
+                .toList();
+    }
+
+    @PostAuthorize("hasRole('ADMIN') or returnObject.username == authentication.name")
+    public UserResponse getUserByUsername(String username) {
+        return userMapper.toUserResponse(userRepository.findAll().stream()
                 .filter(user -> user.getUsername().equals(username))
                 .findFirst()
-                .orElseThrow(() -> new RuntimeException("User not found with username: " + username));
+                .orElseThrow(() -> new RuntimeException("User not found with username: " + username)));
     }
-
+    
     public User getUserById(String userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
     }
 
-    public User updateUserById(String userId, UserUpdateRequest request) {
+    public UserResponse updateUserById(String userId, UserUpdateRequest request) {
         User user = getUserById(userId);
 
-        if (request.getPassword() != null) {
-            user.setPassword(request.getPassword());
-        }
-        if (request.getFirstName() != null) {
-            user.setFirstName(request.getFirstName());
-        }
-        if (request.getLastName() != null) {
-            user.setLastName(request.getLastName());
-        }
-        if (request.getDob() != null) {
-            user.setDob(request.getDob());
-        }
+        userMapper.updateUserFromRequest(user, request);
 
-        return userRepository.save(user);
+        return userMapper.toUserResponse(userRepository.save(user));
+    }
+
+    public UserResponse getMyInfo() {
+        var content =SecurityContextHolder.getContext();
+        String username = content.getAuthentication().getName();
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException(ErrorCode.USER_NOT_FOUND.getMessage()));
+        return userMapper.toUserResponse(user);
     }
 
     public void deleteUserById(String userId) {
